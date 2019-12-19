@@ -1,4 +1,10 @@
 # Starter pipeline
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: 'Free Trial (fc973f79-b846-4b37-bc54-de8cf7c568d3)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: 'C:\Program Files (x86)\TRICENTIS\Tosca Testsuite\ToscaCommander\ToscaCI\Client>ToscaCIClient.exe -m local'
 # Start with a minimal pipeline that you can customize to build and deploy your code.
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
