@@ -16,7 +16,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-- script: C:\Program Files (x86)\TRICENTIS\Tosca Testsuite\ToscaCommander\ToscaCI\Client>ToscaCIClient.exe -m local
+- script: echo Hello, world!
   displayName: 'Run a one-line script'
 
 - script: |
