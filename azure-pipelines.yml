@@ -1,4 +1,9 @@
-'-task': "AzureCLI@2\ninputs:\n    scriptType: 'bash'\n  scriptLocation: 'inlineScript'\n  inlineScript: 'C:\\Program Files (x86)\\TRICENTIS\\Tosca Testsuite\\ToscaCommander\\ToscaCI\\Client>ToscaCIClient.exe -m local'"
+- task : AzureCLI@2
+    inputs: 
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'C:\Program Files (x86)\TRICENTIS\Tosca Testsuite\ToscaCommander\ToscaCI\Client>ToscaCIClient.exe -m local' 
+
 trigger:
     - master
 pool:
