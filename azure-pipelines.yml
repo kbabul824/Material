@@ -9,7 +9,7 @@ trigger:
     script: |
       echo Write your commands here
       
-       C:\Program Files (x86)\TRICENTIS\Tosca Testsuite\ToscaCommander\ToscaCI\Client>ToscaCIClient.exe -m local
+       
 - master
 
 pool:
