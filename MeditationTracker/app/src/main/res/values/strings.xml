@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Meditation Tracker</string>
+    <string name="tagline">Mindfulness, measured simply.</string>
+    <string name="mode_interval">Interval Reminder</string>
+    <string name="mode_interval_desc">Set customizable chimes at specific intervals during your session.</string>
+    <string name="mode_long_duration">Long Duration</string>
+    <string name="mode_long_duration_desc">Set a target meditation duration with periodic milestone alerts.</string>
+    <string name="start_session">Start Meditation</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="finish">Finish Session</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save to History</string>
+    <string name="notes_hint">How was your session? Add thoughts or reflections...</string>
+    <string name="history_title">Session History</string>
+    <string name="history_empty">No meditation sessions recorded yet. Begin your journey today!</string>
+    <string name="settings_title">Settings</string>
+    <string name="sound_effects">Chime &amp; Sound Alerts</string>
+    <string name="vibration_alert">Vibration Alerts</string>
+    <string name="dynamic_theme">Material You Dynamic Colors</string>
+    <string name="language">Language</string>
+</resources>

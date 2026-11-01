@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Rastreador de Meditación</string>
+    <string name="tagline">Atención plena, medida de forma sencilla.</string>
+    <string name="mode_interval">Recordatorio por Intervalos</string>
+    <string name="mode_interval_desc">Configura campanas personalizadas en momentos clave durante tu sesión.</string>
+    <string name="mode_long_duration">Larga Duración</string>
+    <string name="mode_long_duration_desc">Establece una duración objetivo con alertas de hitos periódicos.</string>
+    <string name="start_session">Iniciar Meditación</string>
+    <string name="pause">Pausar</string>
+    <string name="resume">Reanudar</string>
+    <string name="finish">Finalizar Sesión</string>
+    <string name="cancel">Cancelar</string>
+    <string name="save">Guardar en Historial</string>
+    <string name="notes_hint">¿Cómo estuvo tu sesión? Agrega reflexiones o notas...</string>
+    <string name="history_title">Historial de Sesiones</string>
+    <string name="history_empty">Aún no hay sesiones grabadas. ¡Comienza hoy tu práctica!</string>
+    <string name="settings_title">Configuración</string>
+    <string name="sound_effects">Alertas de Campana y Sonido</string>
+    <string name="vibration_alert">Alertas de Vibración</string>
+    <string name="dynamic_theme">Colores Dinámicos Material You</string>
+    <string name="language">Idioma</string>
+</resources>
