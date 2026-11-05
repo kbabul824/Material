@@ -15,6 +15,6 @@ class MeditationRepositoryImpl @Inject constructor(
     override fun getSessionsByMode(mode: MeditationMode): Flow<List<SessionHistory>> = sessionDao.getSessionsByMode(mode)
     override fun getTotalSessionsCount(): Flow<Int> = sessionDao.getTotalSessionsCount()
     override fun getTotalMeditationTimeSeconds(): Flow<Long> = sessionDao.getTotalMeditationTimeSeconds()
-    override fun saveSession(session: SessionHistory): Long = kotlinx.coroutines.runBlocking { sessionDao.insertSession(session) }
-    override fun deleteSession(session: SessionHistory) = kotlinx.coroutines.runBlocking { sessionDao.deleteSession(session) }
+    override suspend fun saveSession(session: SessionHistory): Long = sessionDao.insertSession(session)
+    override suspend fun deleteSession(session: SessionHistory) = sessionDao.deleteSession(session)
 }

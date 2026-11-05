@@ -91,16 +91,23 @@ fun SessionScreen(
                         )
                 )
 
-                // Timer numbers
+                // Timer numbers counting UP from 0:00 to target goal
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val remaining = serviceState.remainingSeconds
-                    val minutes = remaining / 60
-                    val seconds = remaining % 60
+                    val elapsed = serviceState.elapsedSeconds
+                    val minutes = elapsed / 60
+                    val seconds = elapsed % 60
+                    val targetMinutes = targetDurationSeconds / 60
                     Text(
                         text = String.format("%02d:%02d", minutes, seconds),
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Goal: ${targetMinutes}:00",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
