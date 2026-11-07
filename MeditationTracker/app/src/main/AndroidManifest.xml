@@ -2,11 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions for foreground meditation timer alerts and notifications -->
+    <!-- Permissions for uninterrupted background meditation timer, bells and speech -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Query system Text-to-Speech services for voice minute announcements -->
@@ -36,15 +36,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Foreground Service for background timer and bell notifications -->
+        <!-- Media Playback Foreground Service to prevent OS suspension during screen timeout/lock -->
         <service
             android:name=".service.SessionTimerService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Meditation timer and interval chime audio player" />
-        </service>
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

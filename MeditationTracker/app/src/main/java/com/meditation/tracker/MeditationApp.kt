@@ -1,6 +1,7 @@
 package com.meditation.tracker
 
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
@@ -18,11 +19,12 @@ class MeditationApp : Application() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Meditation Session Active",
-                NotificationManager.IMPORTANCE_LOW
+                "Active Meditation Session",
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Shows progress and provides controls for active meditation sessions"
                 setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
             val alertChannel = NotificationChannel(
@@ -32,6 +34,7 @@ class MeditationApp : Application() {
             ).apply {
                 description = "Alerts and gentle bells marking meditation intervals"
                 enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
             val manager = getSystemService(NotificationManager::class.java)
