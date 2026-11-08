@@ -1,4 +1,4 @@
-﻿package com.example.datatimer;
+package com.example.datatimer;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.BroadcastReceiver;

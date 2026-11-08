@@ -1,4 +1,4 @@
-﻿package com.example.datatimer;
+package com.example.datatimer;
 
 import android.Manifest;
 import android.content.Intent;
