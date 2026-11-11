@@ -1,5 +1,10 @@
 package com.meditation.tracker.ui.screens.session
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,6 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.meditation.tracker.service.SessionTimerService
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 fun SessionScreen(
     modeString: String,
@@ -34,16 +45,43 @@ fun SessionScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var notesText by remember { mutableStateOf("") }
 
+    // Helper function to guarantee session is saved to history whenever manually stopped
+    val saveCurrentSessionToHistory: (notes: String) -> Unit = { userNotes ->
+        val elapsed = serviceState.elapsedSeconds
+        if (elapsed >= 3) {
+            val configSummary = if (intervalStepSeconds > 0) {
+                "Chime every ${intervalStepSeconds / 60}m"
+            } else {
+                "Open duration"
+            }
+            viewModel.saveCompletedSession(
+                mode = modeString,
+                durationSeconds = elapsed,
+                intervalConfigSummary = configSummary,
+                notes = userNotes
+            )
+        }
+    }
+
+    // Keep the screen awake during active meditation so screen timeout does not lock it
+    DisposableEffect(Unit) {
+        val window = context.findActivity()?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // Start timer foreground service on initial launch
     LaunchedEffect(Unit) {
         SessionTimerService.start(context, targetDurationSeconds, intervalStepSeconds)
     }
 
-    // Auto-prompt save dialog when session finishes
-    LaunchedEffect(serviceState.isFinished) {
-        if (serviceState.isFinished && serviceState.totalDurationSeconds > 0) {
-            showSaveDialog = true
-        }
+    // Handle physical or gesture back button: save completed time automatically
+    BackHandler {
+        saveCurrentSessionToHistory(notesText)
+        SessionTimerService.stop(context)
+        onSessionFinished()
     }
 
     // Mindful Breathing Animation
@@ -74,11 +112,10 @@ fun SessionScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Visual breathing circle & countdown display
+            // Visual breathing circle & count-up display
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(280.dp)
+                modifier = Modifier.size(280.dp)
             ) {
                 // Outer pulsing aura
                 Box(
@@ -91,24 +128,38 @@ fun SessionScreen(
                         )
                 )
 
-                // Timer numbers counting UP from 0:00 to target goal
+                // Timer numbers counting UP from 0:00 (continues indefinitely even after goal!)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val elapsed = serviceState.elapsedSeconds
                     val minutes = elapsed / 60
                     val seconds = elapsed % 60
-                    val targetMinutes = targetDurationSeconds / 60
                     Text(
                         text = String.format("%02d:%02d", minutes, seconds),
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Goal: ${targetMinutes}:00",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+
+                    // Goal status indicator for Interval mode
+                    if (modeString == "INTERVAL" && targetDurationSeconds in 1..86399) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val goalMinutes = targetDurationSeconds / 60
+                        if (elapsed >= targetDurationSeconds) {
+                            Text(
+                                text = "Goal reached ($goalMinutes:00) • Continuing",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Text(
+                                text = "Goal: $goalMinutes:00",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (serviceState.isRunning) "Inhale • Exhale" else "Paused",
@@ -126,15 +177,15 @@ fun SessionScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Cancel
+                // Stop button: pauses and opens save dialog
                 FilledTonalIconButton(
                     onClick = {
-                        SessionTimerService.stop(context)
-                        onCancel()
+                        SessionTimerService.pause(context)
+                        showSaveDialog = true
                     },
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel Session")
+                    Icon(Icons.Default.Close, contentDescription = "Stop Session")
                 }
 
                 // Pause / Play
@@ -157,7 +208,7 @@ fun SessionScreen(
                     )
                 }
 
-                // Complete early
+                // Complete and Save button
                 FilledTonalIconButton(
                     onClick = {
                         SessionTimerService.pause(context)
@@ -173,13 +224,24 @@ fun SessionScreen(
 
     // Save Reflection Dialog
     if (showSaveDialog) {
+        val elapsed = serviceState.elapsedSeconds
         AlertDialog(
-            onDismissRequest = { showSaveDialog = false },
-            title = { Text("Complete Session") },
+            onDismissRequest = {
+                // Even if dismissed, completed time is preserved and saved
+                saveCurrentSessionToHistory(notesText)
+                SessionTimerService.stop(context)
+                showSaveDialog = false
+                onSessionFinished()
+            },
+            title = { Text("Session Ended") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val elapsed = targetDurationSeconds - serviceState.remainingSeconds
-                    Text("Time practiced: ${elapsed / 60}m ${elapsed % 60}s")
+                    Text("Time completed: ${elapsed / 60}m ${elapsed % 60}s")
+                    Text(
+                        text = "Your completed time has been saved to your history.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     OutlinedTextField(
                         value = notesText,
                         onValueChange = { notesText = it },
@@ -191,30 +253,25 @@ fun SessionScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        saveCurrentSessionToHistory(notesText)
                         SessionTimerService.stop(context)
-                        val elapsed = (targetDurationSeconds - serviceState.remainingSeconds).coerceAtLeast(1)
-                        viewModel.saveCompletedSession(
-                            mode = modeString,
-                            durationSeconds = elapsed,
-                            intervalConfigSummary = if (intervalStepSeconds > 0) "Every ${intervalStepSeconds / 60}m bell" else "No intervals",
-                            notes = notesText
-                        )
                         showSaveDialog = false
                         onSessionFinished()
                     }
                 ) {
-                    Text("Save")
+                    Text("Save & View History")
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
+                        saveCurrentSessionToHistory("")
                         SessionTimerService.stop(context)
                         showSaveDialog = false
-                        onCancel()
+                        onSessionFinished()
                     }
                 ) {
-                    Text("Discard")
+                    Text("Done")
                 }
             }
         )

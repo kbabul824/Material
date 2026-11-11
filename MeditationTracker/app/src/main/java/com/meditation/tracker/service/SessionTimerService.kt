@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -20,8 +21,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
 /**
- * Robust Foreground Service that uses a Partial WakeLock, SystemClock.elapsedRealtime(),
- * and Android Text-to-Speech (TTS) to chime and announce completed minutes at each interval.
+ * Resilient Media Playback Foreground Service.
+ * Counts UP indefinitely until manually stopped by the user.
+ * Even after a goal or target is reached, it announces the milestone
+ * and continues counting without stopping.
  */
 class SessionTimerService : Service(), TextToSpeech.OnInitListener {
 
@@ -31,10 +34,12 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
-    private var targetEndTimeMs: Long = 0L
+    private var sessionStartTimeMs: Long = 0L
+    private var elapsedSecondsBeforePause: Int = 0
     private var totalSecondsConfigured: Int = 0
     private var intervalStepConfigured: Int = 0
     private var lastTriggeredIntervalIndex: Int = 0
+    private var goalMilestoneAnnounced: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,12 +61,11 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 tts?.setLanguage(Locale.US)
             }
-            // Use gentle, calm speech rate for meditation
             tts?.setSpeechRate(0.85f)
             tts?.setPitch(0.95f)
-            
+
             val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
             tts?.setAudioAttributes(audioAttributes)
@@ -94,7 +98,7 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
             }
         }
         if (wakeLock?.isHeld != true) {
-            wakeLock?.acquire(4 * 60 * 60 * 1000L) // 4 hours max timeout
+            wakeLock?.acquire(4 * 60 * 60 * 1000L) // 4 hours timeout
         }
     }
 
@@ -108,38 +112,55 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
 
     private fun startSession(totalSeconds: Int, intervalStep: Int) {
         acquireWakeLock()
+
+        // If session is ALREADY running, do not reset elapsed time
+        if (_sessionState.value.isRunning) {
+            return
+        }
+
         totalSecondsConfigured = totalSeconds
         intervalStepConfigured = intervalStep
         lastTriggeredIntervalIndex = 0
+        goalMilestoneAnnounced = false
+        elapsedSecondsBeforePause = 0
 
         val now = SystemClock.elapsedRealtime()
-        targetEndTimeMs = now + (totalSeconds * 1000L)
+        sessionStartTimeMs = now
 
         _sessionState.value = SessionState(
             totalDurationSeconds = totalSeconds,
             remainingSeconds = totalSeconds,
+            elapsedSeconds = 0,
             intervalStepSeconds = intervalStep,
             isRunning = true,
             isFinished = false
         )
 
-        startForeground(NOTIFICATION_ID, buildNotification(_sessionState.value))
+        promoteToForeground()
         runTimerLoop()
+    }
+
+    private fun promoteToForeground() {
+        val notification = buildNotification(_sessionState.value)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun runTimerLoop() {
         timerJob?.cancel()
         timerJob = serviceScope.launch {
-            while (isActive && _sessionState.value.isRunning && targetEndTimeMs > 0) {
+            while (isActive && _sessionState.value.isRunning) {
                 val now = SystemClock.elapsedRealtime()
-                val remainingMs = (targetEndTimeMs - now).coerceAtLeast(0L)
-                val remainingSec = (remainingMs / 1000L).toInt()
-                val elapsedSec = totalSecondsConfigured - remainingSec
+                val elapsedMs = now - sessionStartTimeMs
+                val elapsedSec = (elapsedMs / 1000L).toInt()
 
-                // Interval bell & voice announcement
+                // 1. Periodic Interval Check (chimes & announces minutes completed)
                 if (intervalStepConfigured > 0 && elapsedSec > 0) {
                     val currentIntervalIndex = elapsedSec / intervalStepConfigured
-                    if (currentIntervalIndex > lastTriggeredIntervalIndex && remainingSec > 0) {
+                    if (currentIntervalIndex > lastTriggeredIntervalIndex) {
                         lastTriggeredIntervalIndex = currentIntervalIndex
                         val minutesCompleted = elapsedSec / 60
                         val announcement = if (minutesCompleted == 1) {
@@ -151,26 +172,23 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
                     }
                 }
 
+                // 2. Target Goal Milestone Check (announced when target is first reached, but timer continues!)
+                if (totalSecondsConfigured in 1..86399 && elapsedSec >= totalSecondsConfigured && !goalMilestoneAnnounced) {
+                    goalMilestoneAnnounced = true
+                    val goalMinutes = totalSecondsConfigured / 60
+                    val announcement = "Goal of $goalMinutes minutes reached"
+                    playBellAndAnnounce(announcement)
+                }
+
+                val remainingSec = (totalSecondsConfigured - elapsedSec).coerceAtLeast(0)
+
                 _sessionState.value = _sessionState.value.copy(
                     remainingSeconds = remainingSec,
                     elapsedSeconds = elapsedSec,
-                    isFinished = remainingSec <= 0
+                    isFinished = false // Always continue until user manually stops
                 )
 
                 updateNotification(_sessionState.value)
-
-                if (remainingSec <= 0) {
-                    val totalMinutes = totalSecondsConfigured / 60
-                    val finalMessage = if (totalMinutes == 1) {
-                        "Session complete. 1 minute completed."
-                    } else {
-                        "Session complete. $totalMinutes minutes completed."
-                    }
-                    playBellAndAnnounce(finalMessage)
-                    releaseWakeLock()
-                    stopForeground(STOP_FOREGROUND_DETACH)
-                    break
-                }
 
                 delay(500L)
             }
@@ -179,9 +197,9 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
 
     private fun pauseSession() {
         val now = SystemClock.elapsedRealtime()
-        val remainingMs = (targetEndTimeMs - now).coerceAtLeast(0L)
+        elapsedSecondsBeforePause = ((now - sessionStartTimeMs) / 1000L).toInt()
         _sessionState.value = _sessionState.value.copy(
-            remainingSeconds = (remainingMs / 1000L).toInt(),
+            elapsedSeconds = elapsedSecondsBeforePause,
             isRunning = false
         )
         timerJob?.cancel()
@@ -193,7 +211,7 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
     private fun resumeSession() {
         acquireWakeLock()
         val now = SystemClock.elapsedRealtime()
-        targetEndTimeMs = now + (_sessionState.value.remainingSeconds * 1000L)
+        sessionStartTimeMs = now - (elapsedSecondsBeforePause * 1000L)
         _sessionState.value = _sessionState.value.copy(isRunning = true)
         runTimerLoop()
     }
@@ -209,7 +227,7 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
     private fun playBellAndAnnounce(voiceMessage: String) {
         // 1. Play gentle bell tone
         try {
-            val toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 85)
+            val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 85)
             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 450)
         } catch (_: Exception) {}
 
@@ -229,9 +247,9 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
             vibrator.vibrate(250)
         }
 
-        // 3. Spoken voice announcement through Text-to-Speech
+        // 3. Spoken voice announcement
         serviceScope.launch {
-            delay(550L) // Wait half a second after the bell sound finishes
+            delay(550L)
             if (isTtsReady && tts != null) {
                 tts?.speak(voiceMessage, TextToSpeech.QUEUE_FLUSH, null, "meditation_minute_announcement")
             }
@@ -248,8 +266,17 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
         val minutes = state.elapsedSeconds / 60
         val seconds = state.elapsedSeconds % 60
         val timeFormatted = String.format("%02d:%02d", minutes, seconds)
-        val targetMinutes = state.totalDurationSeconds / 60
-        val statusText = if (state.isRunning) "Meditation active • $timeFormatted / ${targetMinutes}:00" else "Paused • $timeFormatted / ${targetMinutes}:00"
+        val statusText = if (state.totalDurationSeconds >= 86400) {
+            // Open-ended / Long Duration
+            if (state.isRunning) "Meditation active • $timeFormatted" else "Paused • $timeFormatted"
+        } else {
+            val targetMinutes = state.totalDurationSeconds / 60
+            if (state.elapsedSeconds >= state.totalDurationSeconds) {
+                if (state.isRunning) "Meditation active • $timeFormatted (Goal reached)" else "Paused • $timeFormatted (Goal reached)"
+            } else {
+                if (state.isRunning) "Meditation active • $timeFormatted / ${targetMinutes}:00" else "Paused • $timeFormatted / ${targetMinutes}:00"
+            }
+        }
 
         return NotificationCompat.Builder(this, MeditationApp.CHANNEL_ID)
             .setContentTitle("Meditation Session")
@@ -258,7 +285,8 @@ class SessionTimerService : Service(), TextToSpeech.OnInitListener {
             .setContentIntent(pendingIntent)
             .setOngoing(state.isRunning)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
     }
 
